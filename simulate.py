@@ -50,7 +50,6 @@ im = ax.imshow(u_masked, cmap=cmap, vmin=-0.4, vmax=0.4)
 
 disturbTime = 0
 wavelength = 20
-borderless = True
 def update(frame):
     global u, u_new, u_old, disturbTime
 
@@ -63,13 +62,6 @@ def update(frame):
     
     # wall
     generateWalls()
-
-    #changes whether waves bounce off of window borders
-    if borderless:
-        u[0, :] = u[1, :]
-        u[-1, :] = u[-2, :]
-        u[:, 0] = u[:, 1]
-        u[:, -1] = u[:, -2]
 
     # finite difference wave equation
     u_new[1:-1,1:-1] = (2*u[1:-1,1:-1] - u_old[1:-1,1:-1] + (c*dt/dx)**2 * (u[2:,1:-1] + u[:-2,1:-1] + u[1:-1,2:] + u[1:-1,:-2] - 4*u[1:-1,1:-1]))
