@@ -3,78 +3,69 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 from scipy.ndimage import gaussian_filter
 
-# Grid setup
-GRID_WIDTH, GRID_HEIGHT = 100, 100  #size of grid
-dx = dy = 1.0 # spacial step size between grid points (1 unit apart)
-c = 4.0 # wave speed
-dt = 0.1 #times step (amount of time wave advances each frame) CFL condition c*(dt/dx) <= 1/sqrt(2)
-steps = 500 # num frames
-
 def round_half_up(n):
     return int(n+0.5) if n > 0 else int(n-0.5)
 
-# Wave field arrays
-u = np.zeros((GRID_WIDTH, GRID_HEIGHT))      # current
-u_new = np.zeros((GRID_WIDTH, GRID_HEIGHT))  # next
-u_old = np.zeros((GRID_WIDTH, GRID_HEIGHT))  # previous
+class Wave_2D:
+    def __init__(self, grid_width, grid_height, dx, dy, speed, wavelength, frames, disturbancePoints, walls):
+        self.grid_width = grid_width
+        self.grid_height = grid_height
+        self.dx = dx #spacial step size between grid points
+        self.dy = dy
+        self.c = speed #wave speed
+        self.wavelength = wavelength
+        self.dt = 0.1 #times step (amount of time wave advances each frame) CFL condition c*(dt/dx) <= 1/sqrt(2)
+        self.frames = frames
+        self.disturbancePoints = disturbancePoints
+        self.walls = walls
 
-disturbancePoints = [(GRID_WIDTH-5, GRID_HEIGHT//2)]
+        self.u = np.zeros((self.grid_width, self.grid_height))      # current
+        self.u_new = np.zeros((self.grid_width, self.grid_height))  # next
+        self.u_old = np.zeros((self.grid_width, self.grid_height))  # previous
 
-def generateDisturbance():
-    global disturbancePoints
-    for i in range(len(disturbancePoints)):
-        u[disturbancePoints[i][0], disturbancePoints[i][1]] = -2
+        # Initial disturbance
+        self.generateDisturbance()
 
-# two points define wall
-walls = [[(60, 0),(61, GRID_WIDTH//2 - 10)], [(60, GRID_WIDTH//2 - 5),(61, GRID_WIDTH//2 + 5)],[(60, GRID_WIDTH//2 + 10),(61, GRID_WIDTH)]]
+        #wall mask
+        self.mask = np.zeros_like(self.u, dtype=bool)
+        for w in self.walls:
+            self.mask[w[0][0] : w[1][0], w[0][1] : w[1][1]] = True
+        self.u_masked = np.ma.masked_array(self.u, mask=self.mask)
 
-def generateWalls():
-    global walls
-    for w in walls:
-        u[w[0][0] : w[1][0], w[0][1] : w[1][1]] = 0
+        self.cmap = plt.cm.magma.copy()
+        self.cmap.set_bad(color='#a5ff63')
 
-# Initial disturbance
-generateDisturbance()
+        self.fig, self.ax = plt.subplots()
+        self.im = self.ax.imshow(self.u_masked, cmap=self.cmap, vmin=-0.4, vmax=0.4)
 
-#wall mask
-mask = np.zeros_like(u, dtype=bool)
-for w in walls:
-    mask[w[0][0] : w[1][0], w[0][1] : w[1][1]] = True
-u_masked = np.ma.masked_array(u, mask=mask)
+        self.disturbTime = 0
 
-cmap = plt.cm.magma.copy()
-cmap.set_bad(color='#a5ff63')
+        self.ani = FuncAnimation(self.fig, self.update, frames=self.frames, interval=30, blit=True)
+        plt.show()
+    def generateDisturbance(self):
+        for i in range(len(self.disturbancePoints)):
+            self.u[self.disturbancePoints[i][0], self.disturbancePoints[i][1]] = -2
+    def generateWalls(self):
+        for w in self.walls:
+            self.u[w[0][0] : w[1][0], w[0][1] : w[1][1]] = 0
+    def update(self, frame):
+        if self.disturbTime == self.wavelength:
+            self.generateDisturbance()
+            self.disturbTime = 0
+        else:
+            self.disturbTime += 1
 
-fig, ax = plt.subplots()
-im = ax.imshow(u_masked, cmap=cmap, vmin=-0.4, vmax=0.4)
+        self.generateWalls()
 
-disturbTime = 0
-wavelength = 20
-def update(frame):
-    global u, u_new, u_old, disturbTime
+        #finite difference wave equation
+        self.u_new[1:-1,1:-1] = (2*self.u[1:-1,1:-1] - self.u_old[1:-1,1:-1] + (self.c*self.dt/self.dx)**2 * (self.u[2:,1:-1] + self.u[:-2,1:-1] + self.u[1:-1,2:] + self.u[1:-1,:-2] - 4*self.u[1:-1,1:-1]))
 
-    #produces waves
-    if disturbTime == wavelength:
-        generateDisturbance()
-        disturbTime = 0
-    else:
-        disturbTime += 1
-    
-    # wall
-    generateWalls()
+        # rotate arrays
+        self.u_old, self.u, self.u_new = self.u, self.u_new, self.u_old
 
-    # finite difference wave equation
-    u_new[1:-1,1:-1] = (2*u[1:-1,1:-1] - u_old[1:-1,1:-1] + (c*dt/dx)**2 * (u[2:,1:-1] + u[:-2,1:-1] + u[1:-1,2:] + u[1:-1,:-2] - 4*u[1:-1,1:-1]))
+        #smooth
+        u_smooth = gaussian_filter(self.u, sigma=round_half_up(0.05*self.wavelength))
+        self.u_masked = np.ma.masked_array(u_smooth, mask=self.mask)
 
-    # rotate arrays
-    u_old, u, u_new = u, u_new, u_old
-
-    #smooth
-    u_smooth = gaussian_filter(u, sigma=round_half_up(0.05*wavelength))
-    u_masked = np.ma.masked_array(u_smooth, mask=mask)
-
-    im.set_array(u_masked)
-    return [im]
-
-ani = FuncAnimation(fig, update, frames=steps, interval=30, blit=True)
-plt.show()
+        self.im.set_array(self.u_masked)
+        return [self.im]
