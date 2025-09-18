@@ -7,31 +7,37 @@ def round_half_up(n):
     return int(n+0.5) if n > 0 else int(n-0.5)
 
 class Wave_1D:
-    def __init__(self, length, speed, nx, frames):
+    def __init__(self, length, speed, nx, frames, startingPoints):
         self.length = length
         self.c = speed
         self.nx = nx
-        self.dx = self.L / (self.nx - 1)
+        self.dx = self.length / (self.nx - 1)
         self.frames = frames
         self.dt = 0.001
+
+        self.x = np.linspace(0, self.length, self.nx)
 
         self.u = np.zeros(self.nx)
         self.u_prev = np.zeros(self.nx)
         self.u_next = np.zeros(self.nx)
 
-        # --- Initial condition: a bump in the center ---
-        self.u[int(self.nx/2 - 5):int(self.nx/2 + 5)] = 1.0
+        #Initial condition:
+        ylim = 1
+        for p in startingPoints:
+            self.u[p[0][0]:p[0][1]] = p[1]
+            if abs(p[1]) > ylim:
+                ylim = abs(p[1])
         self.u_prev[:] = self.u[:]  # Assume zero initial velocity
 
         #plot
         self.fig, self.ax = plt.subplots()
         self.line, = self.ax.plot(self.x, self.u)
-        self.ax.set_ylim(-1.2, 1.2)
+        self.ax.set_ylim(-ylim, ylim)
 
         #run
-        self.ani = FuncAnimation(self.fig, self.update, frames=self.nt, interval=self.dt*1000, blit=True)
+        self.ani = FuncAnimation(self.fig, self.update, frames=self.frames, interval=self.dt*1000, blit=True)
         plt.show()
-    def update(self):
+    def update(self, frame):
         for i in range(1, self.nx - 1):
             self.u_next[i] = (2 * self.u[i] - self.u_prev[i] +
                         (self.c * self.dt/self.dx)**2 * (self.u[i+1] - 2*self.u[i] + self.u[i-1]))
@@ -43,7 +49,11 @@ class Wave_1D:
         # Swap arrays
         self.u_prev, self.u, self.u_next = self.u, self.u_next, self.u_prev
 
+        self.u = gaussian_filter(self.u, sigma=1)
+
         self.line.set_ydata(self.u)
+
+        return [self.line]
 
 class Wave_2D:
     def __init__(self, grid_width, grid_height, dx, dy, speed, wavelength, frames, disturbancePoints, walls):

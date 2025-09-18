@@ -10,7 +10,7 @@ GRID_WIDTH = GRID_HEIGHT = 100
 dx = dy = 1.0
 c = 4.0
 wavelength = 20
-frames = 50
+frames = 500
 disturbancePoints = [(GRID_WIDTH-5, GRID_HEIGHT//2)]
 
 # two points define wall
