@@ -1,7 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
+from mpl_toolkits.mplot3d import Axes3D
 from scipy.ndimage import gaussian_filter
+import sys
 
 def round_half_up(n):
     return int(n+0.5) if n > 0 else int(n-0.5)
@@ -10,8 +12,8 @@ class Wave_1D:
     def __init__(self, length, speed, nx, frames, startingPoints):
         self.length = length
         self.c = speed
-        self.nx = nx
-        self.dx = self.length / (self.nx - 1)
+        self.nx = nx #number of discrete points along length
+        self.dx = self.length / (self.nx - 1) #distance between points
         self.frames = frames
         self.dt = 0.001
 
@@ -42,38 +44,41 @@ class Wave_1D:
             self.u_next[i] = (2 * self.u[i] - self.u_prev[i] +
                         (self.c * self.dt/self.dx)**2 * (self.u[i+1] - 2*self.u[i] + self.u[i-1]))
 
-        # Apply boundary conditions (fixed ends)
+        # Apply boundaries
         self.u_next[0] = 0
         self.u_next[-1] = 0
 
         # Swap arrays
         self.u_prev, self.u, self.u_next = self.u, self.u_next, self.u_prev
 
+        #smooth
         self.u = gaussian_filter(self.u, sigma=1)
 
         self.line.set_ydata(self.u)
-
         return [self.line]
 
 class Wave_2D:
-    def __init__(self, grid_width, grid_height, dx, dy, speed, wavelength, frames, disturbancePoints, walls):
+    def __init__(self, grid_width, grid_height, dx, dy, speed, frames, disturbancePoints, walls):
         self.grid_width = grid_width
         self.grid_height = grid_height
         self.dx = dx #spacial step size between grid points
         self.dy = dy
         self.c = speed #wave speed
-        self.wavelength = wavelength
         self.dt = 0.1 #times step (amount of time wave advances each frame) CFL condition c*(dt/dx) <= 1/sqrt(2)
         self.frames = frames
-        self.disturbancePoints = disturbancePoints
-        self.walls = walls
+        self.disturbancePoints = disturbancePoints #list of ((x,y), wavelength)
+        self.walls = walls #list of ((x1, y1), (x2, y2)) must be horizontal or vertical
 
         self.u = np.zeros((self.grid_width, self.grid_height))      # current
         self.u_new = np.zeros((self.grid_width, self.grid_height))  # next
         self.u_old = np.zeros((self.grid_width, self.grid_height))  # previous
 
-        # Initial disturbance
-        self.generateDisturbance()
+        # Initial disturbances & find minimum wavelength
+        self.min_wavelength = sys.maxsize #for blur calculation in update
+        for i in range(len(self.disturbancePoints)):
+            self.u[self.disturbancePoints[i][0][0], self.disturbancePoints[i][0][1]] = -2
+            if self.disturbancePoints[i][1] < self.min_wavelength:
+                self.min_wavelength = self.disturbancePoints[i][1]
 
         #wall mask
         self.mask = np.zeros_like(self.u, dtype=bool)
@@ -82,27 +87,23 @@ class Wave_2D:
         self.u_masked = np.ma.masked_array(self.u, mask=self.mask)
 
         self.cmap = plt.cm.magma.copy()
-        self.cmap.set_bad(color='#a5ff63')
+        self.cmap.set_bad(color='#a5ff63') #wall color
 
         self.fig, self.ax = plt.subplots()
         self.im = self.ax.imshow(self.u_masked, cmap=self.cmap, vmin=-0.4, vmax=0.4)
 
-        self.disturbTime = 0
+        self.currentFrame = 0 #tracks frames so that distrubances are on time with wavelength
 
         self.ani = FuncAnimation(self.fig, self.update, frames=self.frames, interval=30, blit=True)
         plt.show()
-    def generateDisturbance(self):
-        for i in range(len(self.disturbancePoints)):
-            self.u[self.disturbancePoints[i][0], self.disturbancePoints[i][1]] = -2
     def generateWalls(self):
         for w in self.walls:
             self.u[w[0][0] : w[1][0], w[0][1] : w[1][1]] = 0
     def update(self, frame):
-        if self.disturbTime == self.wavelength:
-            self.generateDisturbance()
-            self.disturbTime = 0
-        else:
-            self.disturbTime += 1
+        for i in range(len(self.disturbancePoints)):
+            if self.currentFrame % self.disturbancePoints[i][1] == 0:#current frame is a factor of wavelength
+                self.u[self.disturbancePoints[i][0][0], self.disturbancePoints[i][0][1]] = -2
+        self.currentFrame += 1
 
         self.generateWalls()
 
@@ -113,12 +114,8 @@ class Wave_2D:
         self.u_old, self.u, self.u_new = self.u, self.u_new, self.u_old
 
         #smooth
-        u_smooth = gaussian_filter(self.u, sigma=round_half_up(0.05*self.wavelength))
+        u_smooth = gaussian_filter(self.u, sigma=round_half_up(0.05*self.min_wavelength))
         self.u_masked = np.ma.masked_array(u_smooth, mask=self.mask)
 
         self.im.set_array(self.u_masked)
         return [self.im]
-    
-class Wave_3D:
-    def __init__(self):
-        pass

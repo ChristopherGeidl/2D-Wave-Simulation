@@ -9,11 +9,12 @@ import simulate
 GRID_WIDTH = GRID_HEIGHT = 100
 dx = dy = 1.0
 c = 4.0
-wavelength = 20
 frames = 500
-disturbancePoints = [((GRID_WIDTH-5, GRID_HEIGHT//2), wavelength)]
-
-# two points define wall (must be vertical or horizontal)
-walls = [((60, 0),(61, GRID_WIDTH//2 - 10)), ((60, GRID_WIDTH//2 - 5),(61, GRID_WIDTH//2 + 5)),((60, GRID_WIDTH//2 + 10),(61, GRID_WIDTH))]
+#((x,y), wavelength)
+disturbancePoints = [((GRID_WIDTH-5, GRID_HEIGHT//2), 20), 
+                     ((5, GRID_HEIGHT//2), 40), 
+                     ((GRID_WIDTH//2, GRID_HEIGHT-5), 60), 
+                     ((GRID_WIDTH//2, 5), 80)]
+walls = []
 
 wave = simulate.Wave_2D(GRID_WIDTH, GRID_HEIGHT, dx, dy, c, frames, disturbancePoints, walls)
